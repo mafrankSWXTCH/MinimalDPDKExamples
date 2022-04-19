@@ -27,7 +27,7 @@
 #include <rte_udp.h>
 #include <rte_ip.h>
 
-#define RX_RING_SIZE 0 
+#define RX_RING_SIZE 0
 #define TX_RING_SIZE 1024
 
 #define NUM_MBUFS 8191
@@ -42,7 +42,7 @@
 #define IP_HDRLEN  0x05 /* default IP header length == five 32-bits words. */
 #define IP_VHL_DEF (IP_VERSION | IP_HDRLEN)
 
-#define TX_PACKET_LENGTH 862
+#define TX_PACKET_LENGTH 1400
 
 #if RTE_BYTE_ORDER == RTE_BIG_ENDIAN
 #define RTE_BE_TO_CPU_16(be_16_v)  (be_16_v)
@@ -83,7 +83,7 @@ uint32_t string_to_ip(char *s) {
         	fprintf(stderr, "bad source IP address format. Use like: -s 198.19.111.179\n");
         	exit(1);
 	}
-	
+
 	return
 		(uint32_t)(a[0]) << 24 |
 		(uint32_t)(a[1]) << 16 |
@@ -101,7 +101,7 @@ uint64_t string_to_mac(char *s) {
 	fprintf(stderr, "bad MAC address format. Use like: -m 0a:38:ca:f6:f3:20\n");
 	exit(1);
     }
-	
+
     return
         (uint64_t)(a[0]) << 40 |
         (uint64_t)(a[1]) << 32 |
@@ -174,8 +174,8 @@ static void send_packet(void)
         if(pkt == NULL) {printf("trouble at rte_mbuf_raw_alloc\n"); return;}
         rte_pktmbuf_reset_headroom(pkt);
         pkt->data_len = TX_PACKET_LENGTH;
-	
-        // set up addresses 
+
+        // set up addresses
         dst_eth_addr.as_int=rte_cpu_to_be_64(DST_MAC);
         rte_ether_addr_copy(&dst_eth_addr.as_addr,&eth_hdr.d_addr);
         rte_ether_addr_copy(&my_addr, &eth_hdr.s_addr);
@@ -193,7 +193,7 @@ static void send_packet(void)
 	// Add some pkt fields
         pkt->nb_segs = 1;
         pkt->pkt_len = pkt->data_len;
-        pkt->ol_flags = 0;
+        pkt->ol_flags = PKT_TX_IPV4 | PKT_TX_IP_CKSUM | PKT_TX_UDP_CKSUM;
 
 	// Actually send the packet
 	pkts_burst[0] = pkt;
@@ -222,6 +222,8 @@ port_init(uint16_t port)
         if (dev_info.tx_offload_capa & DEV_TX_OFFLOAD_MBUF_FAST_FREE)
                 port_conf.txmode.offloads |=
                         DEV_TX_OFFLOAD_MBUF_FAST_FREE;
+
+        port_conf.txmode.offloads |=  DEV_TX_OFFLOAD_IPV4_CKSUM | DEV_TX_OFFLOAD_UDP_CKSUM;
 
         /* Configure the Ethernet device. */
         retval = rte_eth_dev_configure(port, rx_rings, tx_rings, &port_conf);
@@ -295,8 +297,8 @@ int main(int argc, char **argv)
 		case 'm':
 			// note, not quite sure why last two bytes are zero, but that is how DPDK likes it
 			DST_MAC=0ULL;
-			DST_MAC=string_to_mac(optarg)<<16;	
-			mac_flag=1;	
+			DST_MAC=string_to_mac(optarg)<<16;
+			mac_flag=1;
 			break;
 		case 's':
 			IP_SRC_ADDR=string_to_ip(optarg);
@@ -348,7 +350,7 @@ int main(int argc, char **argv)
 	while (true) {
 		counter++;
 		if (counter % 35 == 0) {
-			usleep(1);
+			usleep(1000000);
 		}
 		send_packet();
 	}
